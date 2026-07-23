@@ -6,7 +6,7 @@ export PATH
 # =================================================
 #  全局配置区 (Configuration as Data)
 # =================================================
-readonly SH_VER="100.0.5.15"
+readonly SH_VER="100.0.5.16"
 readonly GITHUB_RAW_URL="https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master"
 readonly GITHUB_API_URL="https://api.github.com/repos/ylx2016/kernel/releases"
 
@@ -233,9 +233,9 @@ remove_old_headers() {
 	if [[ "${OS_TYPE}" == "CentOS" ]]; then
 		# 找出不是当前正在运行的 kernel-headers 并卸载
 		local current_ker=$(uname -r)
-		rpm -qa | grep 'kernel-headers' | grep -v "$current_ker" | xargs -r rpm -e --nodeps >/dev/null 2>&1
+		rpm -qa | grep -E 'kernel(-ml|-lt|-uek|-rt|-plus)?-headers' | grep -v "$current_ker" | xargs -r rpm -e --nodeps >/dev/null 2>&1
 	elif [[ "${OS_TYPE}" == "Debian" ]]; then
-		dpkg -l | grep 'linux-headers' | awk '{print $2}' | grep -v "$(uname -r)" | xargs -r apt-get purge -y >/dev/null 2>&1
+		dpkg -l | grep -E '(linux|proxmox|pve|raspberrypi)-headers' | awk '{print $2}' | grep -v "$(uname -r)" | xargs -r apt-get purge -y >/dev/null 2>&1
 		apt-get autoremove -y >/dev/null 2>&1
 	fi
 }
@@ -843,12 +843,12 @@ show_kernels() {
 	echo -e "${INFO} ==================================================="
 	echo -e "${INFO} 当前系统中已安装的内核包："
 	if [[ "${OS_TYPE}" == "CentOS" ]]; then
-		rpm -qa | grep -E "^kernel(-ml|-lt)?(-image|-core|-modules|-devel|-headers)?-[0-9]" | sort -V
+		rpm -qa | grep -E "^kernel(-ml|-lt|-uek|-rt|-plus)?(-image|-core|-modules|-devel|-headers)?-[0-9]" | sort -V
 		echo -e "${INFO} ==================================================="
 		echo -e "${INFO} GRUB 引导项 (通常 index=0 为默认启动项)："
 		grubby --info=ALL | grep -E "^kernel|^index"
 	elif [[ "${OS_TYPE}" == "Debian" ]]; then
-		dpkg -l | grep -E "^ii  linux-(image|headers|modules)" | awk '{print $2, $3}' | column -t | sort -V
+		dpkg -l | grep -E "^ii  (linux-(image|headers|modules)|pve-kernel|proxmox-kernel|proxmox-headers|raspberrypi-kernel)" | awk '{print $2, $3}' | column -t | sort -V
 		echo -e "${INFO} ==================================================="
 		echo -e "${INFO} /boot 目录下的内核镜像："
 		ls -1v /boot/vmlinuz-* 2>/dev/null
@@ -870,9 +870,9 @@ delete_kernel_custom() {
 
 	# 使用更精准的包查询方式，防止名字过长被截断
 	if [[ "${OS_TYPE}" == "CentOS" ]]; then
-		mapfile -t kernel_list < <(rpm -qa | grep -E "^kernel(-ml|-lt)?(-image|-core|-modules|-devel|-headers)?-[0-9]" | sort -V)
+		mapfile -t kernel_list < <(rpm -qa | grep -E "^kernel(-ml|-lt|-uek|-rt|-plus)?(-image|-core|-modules|-devel|-headers)?-[0-9]" | sort -V)
 	elif [[ "${OS_TYPE}" == "Debian" ]]; then
-		mapfile -t kernel_list < <(dpkg-query -W -f='${Package}\n' | grep -E "^linux-(image|headers|modules)" | sort -V)
+		mapfile -t kernel_list < <(dpkg-query -W -f='${Package}\n' | grep -E "^(linux-(image|headers|modules)|pve-kernel|proxmox-kernel|proxmox-headers|raspberrypi-kernel)" | sort -V)
 	fi
 
 	if [[ ${#kernel_list[@]} -eq 0 ]]; then
@@ -1676,22 +1676,22 @@ check_status() {
 
 	# 检查 Headers 状态 (利用全局 OS_TYPE)
 	if [[ "${OS_TYPE}" == "CentOS" ]]; then
-		installed_headers=$(rpm -qa | grep -E "kernel-devel|kernel-headers" | grep -v '^$' || echo "")
+		installed_headers=$(rpm -qa | grep -E "kernel(-ml|-lt|-uek|-rt|-plus)?-(devel|headers)" | grep -v '^$' || echo "")
 		if [[ -z "$installed_headers" ]]; then
 			headers_status="未安装"
 		else
-			if echo "$installed_headers" | grep -q "kernel-devel-${kernel_version_full}\|kernel-headers-${kernel_version_full}"; then
+			if echo "$installed_headers" | grep -q -E "kernel(-ml|-lt|-uek|-rt|-plus)?-(devel|headers)-${kernel_version_full}"; then
 				headers_status="已匹配"
 			else
 				headers_status="未匹配"
 			fi
 		fi
 	elif [[ "${OS_TYPE}" == "Debian" ]]; then
-		installed_headers=$(dpkg -l | grep -E "linux-headers|linux-image" | awk '{print $2}' | grep -v '^$' || echo "")
+		installed_headers=$(dpkg -l | grep -E "(linux|proxmox|pve|raspberrypi)-(headers|image)" | awk '{print $2}' | grep -v '^$' || echo "")
 		if [[ -z "$installed_headers" ]]; then
 			headers_status="未安装"
 		else
-			if echo "$installed_headers" | grep -q "linux-headers-${kernel_version_full}"; then
+			if echo "$installed_headers" | grep -q -E "(linux|proxmox|pve|raspberrypi)-headers-${kernel_version_full}"; then
 				headers_status="已匹配"
 			else
 				headers_status="未匹配"
