@@ -6,7 +6,7 @@ export PATH
 # =================================================
 #  全局配置区 (Configuration as Data)
 # =================================================
-readonly SH_VER="100.0.6.2"
+readonly SH_VER="100.0.6.3"
 readonly GITHUB_RAW_URL="https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master"
 readonly CLOUD_STATE_FILE="/etc/tcpx_cloud_lastver" # installcloud 记忆上次探测到的最高可安装 Cloud 内核
 
@@ -1562,20 +1562,6 @@ Update_Shell() {
 	exec bash "$self_path"
 }
 
-gototcp() {
-	echo -e "${INFO} 正在切换到卸载内核版本..."
-	local tmp_sh
-	tmp_sh=$(mktemp /tmp/tcp_sh.XXXXXX) || return 1
-
-	if ! fetch_remote_script "${GITHUB_RAW_URL}/tcp.sh" "$tmp_sh"; then
-		rm -f "$tmp_sh"
-		echo -e "${ERROR} tcp.sh 下载失败！"
-		return 1
-	fi
-	chmod +x "$tmp_sh"
-	exec bash "$tmp_sh"
-}
-
 gotodd() {
 	echo -e "${INFO} 正在切换到一键 DD 系统脚本..."
 	local tmp_sh
@@ -1653,7 +1639,6 @@ show_menu_panel() {
 	clear
 	echo && echo -e " TCP加速 一键安装管理脚本 ${RED_FONT_PREFIX}[v${SH_VER}] 不卸内核${FONT_COLOR_SUFFIX} from blog.ylx.me 母鸡慎用
  ${GREEN_FONT_PREFIX}0.${FONT_COLOR_SUFFIX} 升级脚本
- ${GREEN_FONT_PREFIX}91.${FONT_COLOR_SUFFIX} 切换到卸载内核版本
  ———————————————————————————— 内核安装 —————————————————————————————
  ${GREEN_FONT_PREFIX}1.${FONT_COLOR_SUFFIX} 安装 BBR自编编译内核     ${GREEN_FONT_PREFIX}7.${FONT_COLOR_SUFFIX} 安装 官方稳定内核
  ${GREEN_FONT_PREFIX}2.${FONT_COLOR_SUFFIX} 安装 BBRplus版内核       ${GREEN_FONT_PREFIX}8.${FONT_COLOR_SUFFIX} 安装 官方最新内核
@@ -1738,7 +1723,6 @@ start_menu() {
 		52) delete_kernel_custom ;;
 		55) remove_all ;;
 		60) gotoipcheck ;;
-		91) gototcp ;;
 		92) gotodd ;;
 		99)
 			echo -e "${INFO} 已退出。"
