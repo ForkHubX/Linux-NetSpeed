@@ -6,7 +6,7 @@ export PATH
 # =================================================
 #  全局配置区 (Configuration as Data)
 # =================================================
-readonly SH_VER="100.0.6.1"
+readonly SH_VER="100.0.6.2"
 readonly GITHUB_RAW_URL="https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master"
 readonly CLOUD_STATE_FILE="/etc/tcpx_cloud_lastver" # installcloud 记忆上次探测到的最高可安装 Cloud 内核
 
@@ -1257,7 +1257,12 @@ BBR_grub() {
 			_bbr_grub2_mkconfig
 		fi
 	elif [[ "${OS_TYPE}" == "Debian" ]]; then
-		if command -v update-grub >/dev/null 2>&1; then
+		# systemd-boot: deb 包的 postinst 钩子 (kernel-install) 已自动更新引导条目，
+		# 此处只需将 systemd-boot 加载器二进制本身更新到最新即可，无需操作 GRUB。
+		if command -v bootctl >/dev/null 2>&1 && bootctl is-installed 2>/dev/null; then
+			echo -e "${INFO} 检测到 systemd-boot，引导条目已由包管理器钩子自动处理。"
+			bootctl update >/dev/null 2>&1 || true
+		elif command -v update-grub >/dev/null 2>&1; then
 			update-grub >/dev/null 2>&1
 		else
 			apt-get install -y grub2-common >/dev/null 2>&1
