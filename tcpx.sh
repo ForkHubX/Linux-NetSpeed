@@ -6,7 +6,7 @@ export PATH
 # =================================================
 #  全局配置区 (Configuration as Data)
 # =================================================
-readonly SH_VER="100.0.6.5"
+readonly SH_VER="100.0.6.6"
 readonly GITHUB_RAW_URL="https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master"
 readonly CLOUD_STATE_FILE="/etc/tcpx_cloud_lastver" # installcloud 记忆上次探测到的最高可安装 Cloud 内核
 
@@ -1261,7 +1261,8 @@ remove_bbr_lotserver() {
 	# 避免切换算法后残留旧行 (drop-in 排序最靠后，残留会覆盖新选择)。
 	local f
 	for f in /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf "$TCPX_ACCEL_DROPIN"; do
-		[[ -f "$f" ]] && sed -i '/net.core.default_qdisc/d; /net.ipv4.tcp_congestion_control/d; /net.ipv4.tcp_ecn/d' "$f"
+		# tcp_ecn 用 [[:space:]]*= 收尾锚定，避免顺带删掉 net.ipv4.tcp_ecn_fallback
+		[[ -f "$f" ]] && sed -i '/net.core.default_qdisc/d; /net.ipv4.tcp_congestion_control/d; /net\.ipv4\.tcp_ecn[[:space:]]*=/d' "$f"
 	done
 
 	sysctl --system >/dev/null 2>&1
@@ -1352,7 +1353,8 @@ set_ecn() {
 	local sysctl_conf
 	sysctl_conf=$(accel_conf_path)
 	# 从所有可能位置清掉旧 ecn 行，再写入到当前生效优先级最高的文件
-	sed -i '/net.ipv4.tcp_ecn/d' /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf "$TCPX_ACCEL_DROPIN" 2>/dev/null
+	# 收尾锚定 [[:space:]]*=，只删 tcp_ecn 本身，不误伤 tcp_ecn_fallback
+	sed -i '/net\.ipv4\.tcp_ecn[[:space:]]*=/d' /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf "$TCPX_ACCEL_DROPIN" 2>/dev/null
 	echo "net.ipv4.tcp_ecn=$status" >>"$sysctl_conf"
 	sysctl --system >/dev/null 2>&1
 	[[ "$status" == "1" ]] && echo -e "${INFO} ECN 已开启！" || echo -e "${INFO} ECN 已关闭！"
@@ -1366,10 +1368,12 @@ remove_all() {
 	cat /dev/null >/etc/sysctl.conf
 	sysctl --system >/dev/null 2>&1
 
-	sed -i '/DefaultTimeoutStopSec/d; /DefaultLimitCORE/d; /DefaultLimitNOFILE/d; /DefaultLimitNPROC/d' /etc/systemd/system.conf
-	sed -i '/soft   nofile/d; /hard   nofile/d; /soft   nproc/d; /hard   nproc/d; /soft   core/d; /hard   core/d' /etc/security/limits.conf
-	sed -i '/ulimit -SHn/d' /etc/profile
-	sed -i '/required pam_limits.so/d' /etc/pam.d/common-session
+	# 逐个文件加存在性守卫：如 /etc/pam.d/common-session 在 CentOS 上并不存在，
+	# 无守卫的 sed -i 会打印 "No such file" 噪声错误。
+	[[ -f /etc/systemd/system.conf ]] && sed -i '/DefaultTimeoutStopSec/d; /DefaultLimitCORE/d; /DefaultLimitNOFILE/d; /DefaultLimitNPROC/d' /etc/systemd/system.conf
+	[[ -f /etc/security/limits.conf ]] && sed -i '/soft   nofile/d; /hard   nofile/d; /soft   nproc/d; /hard   nproc/d; /soft   core/d; /hard   core/d' /etc/security/limits.conf
+	[[ -f /etc/profile ]] && sed -i '/ulimit -SHn/d' /etc/profile
+	[[ -f /etc/pam.d/common-session ]] && sed -i '/required pam_limits.so/d' /etc/pam.d/common-session
 
 	systemctl daemon-reload
 	remove_bbr_lotserver
@@ -1772,8 +1776,19 @@ Update_Shell() {
 	}
 	chmod +x "$self_path"
 
+	# 同步安装/刷新到 /usr/local/bin/tcpx，保证升级后可直接输入 tcpx 运行，
+	# 不再依赖"旧版本升级后是否会重新执行并触发 install_self"这一不确定链路。
+	local reload_path="$self_path"
+	if [[ "$self_path" != "$TCPX_INSTALL_PATH" && -w "$(dirname "$TCPX_INSTALL_PATH")" ]]; then
+		if cp -f "$self_path" "$TCPX_INSTALL_PATH" 2>/dev/null && chmod +x "$TCPX_INSTALL_PATH" 2>/dev/null; then
+			echo -e "${INFO} 已同步安装到 ${GREEN_FONT_PREFIX}${TCPX_INSTALL_PATH}${FONT_COLOR_SUFFIX}，之后可直接输入 ${GREEN_FONT_PREFIX}tcpx${FONT_COLOR_SUFFIX} 运行。"
+			# 从安装后的规范路径重载，后续升级即针对 /usr/local/bin/tcpx 生效
+			reload_path="$TCPX_INSTALL_PATH"
+		fi
+	fi
+
 	echo -e "${INFO} 更新完成，正在重新载入脚本..."
-	exec bash "$self_path"
+	exec bash "$reload_path"
 }
 
 gotodd() {
